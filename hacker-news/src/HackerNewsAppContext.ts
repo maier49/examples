@@ -33,6 +33,7 @@ export class HackerNewsAppContext extends Evented {
 	}
 
 	public fetchStories(view: story_type = 'top', page: number = 1, pageSize: number = PAGE_SIZE) {
+		console.time('Fetching Stories');
 		const storyCountPromise = getNumberOfStoriesForView(view);
 		const storiesPromise = getStoriesForView(view, page, pageSize);
 		storyCountPromise.then((storyCount) => {
@@ -41,6 +42,7 @@ export class HackerNewsAppContext extends Evented {
 				this._page = page;
 				this._pages = Math.ceil(storyCount/pageSize);
 				this._stories = stories;
+				console.timeEnd('Fetching Stories');
 				this.emit({ type: 'invalidate' });
 			})
 		});

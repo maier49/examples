@@ -1,11 +1,7 @@
-import StoreBase from '@dojo/stores/store/StoreBase';
-import IndexedDBStorage, { IndexedDBOptions } from '@dojo/stores/storage/IndexedDBStorage';
-import createFilter from '@dojo/stores/query/createFilter';
+import request from '@dojo/core/request';
 import Promise from '@dojo/shim/Promise';
 import * as firebase from 'firebase';
 import { Item, story_type, TypeCount } from "./interfaces";
-
-const worker: Worker = new (require('worker-loader?name=hackerNewsWebWorker.js!./hackerNewsWebWorker'));
 
 const DB_NAME = 'dojo2HackerNewsPWA';
 const STORY_TYPES: story_type[] = [ 'top', 'new', 'best', 'ask', 'show', 'jobs' ];
@@ -20,73 +16,6 @@ const MAX_COUNTS: { [ key in story_type ]: number } = {
 };
 let hasData = false;
 
-function createStoryStoreConfig(): IndexedDBOptions<Item, any> {
-	return {
-		idProperty: 'order',
-		indices: {
-			order: true
-		}
-	}
-}
-
-function createStoryStore(view: story_type) {
-	return new StoreBase<Item>({
-		storage: new IndexedDBStorage<Item>({
-			idProperty: 'order',
-			dbName: DB_NAME,
-			objectStoreName: view,
-			indices: {
-				order: true
-			}
-		})
-	});
-}
-
-export const store = new StoreBase<Item>({
-	storage: new IndexedDBStorage<Item>({
-		version: 100,
-		idProperty: 'order',
-		dbName: DB_NAME,
-		additionalStores: {
-			counts: {
-				idProperty: 'type',
-				indices: {
-					type: true
-				}
-			},
-			best: createStoryStoreConfig(),
-			new: createStoryStoreConfig(),
-			jobs: createStoryStoreConfig(),
-			ask: createStoryStoreConfig(),
-			show: createStoryStoreConfig()
-		},
-		objectStoreName: 'top',
-		indices: {
-			order: true
-		}
-	})
-});
-
-const stores = STORY_TYPES.reduce(
-	(stores, view) => {
-		stores[view] = createStoryStore(view);
-
-		return stores;
-	},
-	{} as { [ key in story_type ]: StoreBase<Item> }
-);
-
-export const countsStore = new StoreBase<TypeCount>({
-	storage: new IndexedDBStorage<TypeCount>({
-		dbName: DB_NAME,
-		objectStoreName: 'counts',
-		idProperty: 'type',
-		indices: {
-			type: true
-		}
-	})
-});
-
 const database = firebase.initializeApp({ databaseURL: HACKER_NEWS_API_BASE }).database();
 
 function getStoryRef(type: story_type) {
@@ -94,74 +23,50 @@ function getStoryRef(type: story_type) {
 }
 
 function getItem(index: number, id: string): Promise<Item | null> {
-	return new Promise<Item | null>((resolve, reject) => {
-		database.ref(`/v0/item/${id}`).once('value', (snapshot) => {
-			const item: Item = snapshot.val();
+	return request.get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+		.then((response) => response.text())
+		.then((text) => JSON.parse(text))
+		.then((item) => {
 			if (item) {
 				item.order = index;
 				item.updated = Date.now();
-				resolve(item);
 			}
-			resolve(null);
-		}, reject);
-	});
+
+			return item;
+		});
 }
 
 export function getNumberOfStoriesForView(view: story_type): Promise<number> {
-	return countsStore.get(view).then((count: TypeCount) => count && count.count || MAX_COUNTS[view]);
+	return Promise.resolve(MAX_COUNTS[view]);
 }
 
 export function getStoriesForView(view: story_type, page: number, pageSize: number): Promise<Item[]> {
 	const start = (page - 1) * pageSize;
 	const end = start + pageSize;
 
-	const fetchPromise = stores[view].fetch(
-		createFilter<Item>().greaterThanOrEqualTo('order', start).lessThan('order', end)
-	);
 
-	const requestPromise = !hasData ? new Promise<Item[]>((resolve, reject) => {
+	return new Promise<Item[]>((resolve, reject) => {
 		getStoryRef(view).once(
 			'value',
 			(snapshot) => {
-				const ids: string[] = (snapshot.val() || []).slice(start, end);
+				const allIds: string[] = (snapshot.val() || []);
+				MAX_COUNTS[view] = allIds.length;
+				const ids: string[] = allIds.slice(start, end);
 				Promise.all(ids.map((id, index) => getItem(index, id)))
 					.then<Item[]>((items) => items.filter((item) => item) as Item[], reject)
 					.then(resolve, reject);
 			},
 			reject
 		);
-	}) : Promise.resolve([]);
-
-	return new Promise((resolve, reject) => {
-		let resolved = false;
-		let noData = false;
-		requestPromise.then((data) => {
-			if (!resolved && (data.length || noData)) {
-				resolved = true;
-				resolve(data);
-			}
-		}, () => {
-			if (noData) {
-				resolve([]);
-			}
-		});
-
-		fetchPromise.then((data) => {
-			if (data.length) {
-				hasData = true;
-				if (!resolved) {
-					resolved = true;
-					resolve(data);
-				}
-			}
-			else {
-				noData = true;
-			}
-		}, reject);
 	});
 }
 
 export function startUpdates() {
-	worker.postMessage('');
+	database.ref(`/v0/updates/`).on('value', (snapshot) => {
+		const value = snapshot && snapshot.val();
+		value && value.items && value.items.forEach((id: string) => {
+			request.get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+		});
+	});
 }
 

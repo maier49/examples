@@ -1,5 +1,9 @@
 {
   "build-webpack": {
-    "serviceWorker": "true"
+    "serviceWorker": [ {
+      "urlPattern": "/item.*",
+      "isRegex": true,
+      "handler": "cacheFirst"
+    } ]
   }
 }

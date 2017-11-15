@@ -9,7 +9,7 @@ export interface TodoHeaderProperties extends WidgetProperties {
 	allCompleted: boolean;
 	addTodo: Function;
 	toggleAllTodos: Function;
-	updateTodo: Function;
+	updateTodoItem: Function;
 	value: string;
 }
 
@@ -24,7 +24,7 @@ export default class TodoHeader extends TodoHeaderBase<TodoHeaderProperties> {
 			key: 'new-todo',
 			classes: this.theme(css.newTodo),
 			onkeyup: this.addTodo,
-			oninput: this.updateTodo,
+			oninput: this.updateTodoItem,
 			value,
 			placeholder: 'What needs to be done?'
 		};
@@ -42,8 +42,8 @@ export default class TodoHeader extends TodoHeaderBase<TodoHeaderProperties> {
 		}
 	}
 
-	private updateTodo({ target: { value } }: any) {
-		this.properties.updateTodo(value);
+	private updateTodoItem({ target: { value } }: any) {
+		this.properties.updateTodoItem(value);
 	}
 
 	private toggleAllTodos() {

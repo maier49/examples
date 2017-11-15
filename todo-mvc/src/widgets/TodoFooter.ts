@@ -6,6 +6,7 @@ import { v, w } from '@dojo/widget-core/d';
 import * as css from './styles/todoFooter.css';
 
 export interface TodoFooterProperties extends WidgetProperties {
+	todos: boolean;
 	activeCount: number;
 	clearCompleted: Function;
 	completedItems: boolean;
@@ -21,7 +22,11 @@ export default class TodoFooter extends TodoHeaderBase<TodoFooterProperties> {
 	}
 
 	render() {
-		const { activeCount, completedItems } = this.properties;
+		const { activeCount, completedItems, todos } = this.properties;
+		if (!todos) {
+			return null;
+		}
+
 		const countLabel = activeCount === 1 ? 'item' : 'items';
 
 		return v('footer', { classes: this.theme(css.footer) }, [

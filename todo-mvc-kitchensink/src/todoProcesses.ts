@@ -26,99 +26,106 @@ export interface Todos {
 	[key: string]: Todo;
 }
 
-const addTodoCommand = commandFactory(({ get, path }): PatchOperation[] => {
+const addTodoCommand = commandFactory(({ state }) => {
 	const id = uuid();
-	const todo = { label: get(path('currentTodo')).trim(), id };
-
-	return todo.label ? [
-		add(path('todos', id), todo),
-		replace(path('currentTodo'), '')
-	] : [];
+	const label = state && state.currentTodo && state.currentTodo.trim();
+	if (state && label) {
+		state.todos = state.todos || {};
+		state.todos[id] = { label, id };
+		state.currentTodo = '';
+	}
 });
 
-const updateCompletedFlagCommand = commandFactory(({ get, path }): PatchOperation[] => {
-	const todoCount = get(path('todoCount'));
-	const completed = todoCount > 0 && todoCount === get(path('completedCount'));
-
-	return [
-		replace(path('completed'), completed)
-	];
+const updateCompletedFlagCommand = commandFactory(({ state }) => {
+	if (state) {
+		state.completed = state.todoCount > 0 && state.todoCount === state.completedCount;
+	}
 });
 
-const updateTodoCountsCommand = commandFactory(({ get, path }): PatchOperation[] => {
-	const todos = get(path('todos'));
-	const todoArray = Object.keys(todos).map(key => todos[key]);
+const updateTodoCountsCommand = commandFactory(({ state }) => {
+	if (state) {
+		const todos = state.todos;
+		const todoArray = Object.keys(todos).map(key => todos[key]);
 
-	return [
-		replace(path('todoCount'), todoArray.length),
-		replace(path('completedCount'), todoArray.filter(({ completed }) => completed).length)
-	];
+		state.todoCount = todoArray.length;
+		state.completedCount = todoArray.filter(({ completed }) => completed).length;
+	}
 });
 
-const setCurrentTodoCommand = commandFactory(({ payload: { todo }, path }): PatchOperation[] => {
-	return [
-		replace(path('currentTodo'), todo)
-	];
+const setCurrentTodoCommand = commandFactory(({ payload: { todo }, state }) => {
+	if (state) {
+		state.currentTodo = todo;
+	}
 });
 
-const removeTodoCommand = commandFactory(({ payload: { id }, path }): PatchOperation[] => {
-	return [ remove(path('todos', id)) ];
+const removeTodoCommand = commandFactory(({ payload: { id }, state }) => {
+	if (state && state.todos) {
+		delete state.todos[id];
+	}
 });
 
-const toggleTodoCommand = commandFactory(({ get, path, payload: { id } }): PatchOperation[] => {
-	const completed = !get(path('todos', id, 'completed'));
-
-	return [
-		replace(path('todos', id, 'completed'), completed)
-	];
-
+const toggleTodoCommand = commandFactory(({ state, payload: { id } }) => {
+	if (state) {
+		const todo = state.todos && state.todos[id];
+		if (todo) {
+			todo.completed = !todo.completed;
+		}
+	}
 });
 
-const toggleTodosCommand = commandFactory(({ get, path }): PatchOperation[] => {
-	const completed = !get(path('completed'));
-
-	return [
-		replace(path('completed'), completed),
-		...Object.keys(get(path('todos'))).map(key => replace(path('todos', key, 'completed'), completed))
-	];
+const toggleTodosCommand = commandFactory(({ state }) => {
+	if (state) {
+		const completed = state.completed = !state.completed;
+		Object.keys(state.todos || {}).forEach((id) => {
+			if (state.todos[id]) {
+				state.todos[id].completed = completed;
+			}
+		});
+	}
 });
 
-const editTodoCommand = commandFactory(({ payload: { todo }, path }): PatchOperation[] => {
-	return [ replace(path('editedTodo'), todo) ];
+const editTodoCommand = commandFactory(({ payload: { todo }, state }) => {
+	if (state) {
+		state.editedTodo = todo;
+	}
 });
 
-const clearCompletedCommand = commandFactory(({ get, path }): PatchOperation[] => {
-	const todos: Todos = get(path('todos'));
-	const keys = Object.keys(todos);
+const clearCompletedCommand = commandFactory(({ state }) => {
+	if (state) {
+		const todos: Todos = state.todos || {};
 
-	return [
-		...keys.filter(key => todos[key].completed).map(key => remove(path('todos', key)))
-	];
+		Object.keys(todos).forEach(id => {
+			if (todos[id] && todos[id].completed) {
+				delete todos[id];
+			}
+		});
+	}
 });
 
-const saveTodoCommand = commandFactory(({ get, path }): PatchOperation[] => {
-	const editedTodo = get(path('editedTodo'));
-
-	return editedTodo ? [
-		replace(path('todos', editedTodo.id), editedTodo),
-		replace(path('editedTodo'), undefined)
-	] : [];
+const saveTodoCommand = commandFactory(({ state }) => {
+	const editedTodo = state && state.editedTodo;
+	if (state && editedTodo) {
+		state.todos[editedTodo.id] = editedTodo;
+		delete state.editedTodo;
+	}
 });
 
-const searchCommand = commandFactory(({ payload: { search }, path }): PatchOperation[] => {
-	return [ replace(path('currentSearch'), search) ];
+const searchCommand = commandFactory(({ payload: { search }, state }) => {
+	if (state) {
+		state.currentSearch = search;
+	}
 });
 
-const initialStateCommand = commandFactory(({ path }) => {
-	return [
-		add(path('completedCount'), 0),
-		add(path('completed'), false),
-		add(path('currentSearch'), ''),
-		add(path('currentTodo'), ''),
-		add(path('editedTodo'), undefined),
-		add(path('todoCount'), 0),
-		add(path('todos'), {})
-	];
+const initialStateCommand = commandFactory(({ state }) => {
+	if (state) {
+		state.completedCount = 0;
+		state.completed = false;
+		state.currentSearch = '';
+		state.currentTodo = '';
+		state.editedTodo = undefined;
+		state.todoCount = 0;
+		state.todos = {};
+	}
 });
 
 export const initialStateProcess = createProcess('initial-state', [ initialStateCommand ]);

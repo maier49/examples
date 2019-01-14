@@ -19,7 +19,7 @@
     "npm": ">=3"
   },
   "dependencies": {
-    "@dojo/framework": "^4.0.0",
+    "@dojo/framework": "file:./deps/dojo-framework-5.0.0-pre.tgz",
     "@dojo/widgets": "^4.0.0",
     "cldr-data": "~30.0.2",
     "tslib": "~1.8.1"
